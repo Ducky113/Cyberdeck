@@ -1,180 +1,111 @@
-# Pocket Workstation — Final Project Concept
+# Pocket Workstation OS — Final Project Concept
 
 **Presentation:** 25 November 2026  
-**Primary computer:** Raspberry Pi Zero 2 W  
-**Upgrade/comparison computer:** Raspberry Pi 4 Model B  
-**Project form:** handheld computer concept, Pi OS/kernel work, a modular-device protocol, and an emulation research prototype
+**Primary target:** Raspberry Pi Zero 2 W  
+**Compute interchangeability:** compatible Pi Zero 2-family boards, powered off  
+**Pi 4B:** separate build and comparison machine  
+**Status:** proposed design; implementation and measurements pending
 
 ## Project in one paragraph
 
-Pocket Workstation is a low-power handheld mini-PC centered on the Raspberry Pi Zero 2 W. It starts from Raspberry Pi OS Lite, preserves a usable HDMI/keyboard system, adds a small optional touch desktop, and lets a user add USB-connected ESP32 modules through one documented protocol. The project studies how Linux boots, discovers devices, manages memory, and schedules programs. Its longer-term gaming goal is a custom emulator that dynamically translates console CPU instruction blocks into native ARM64 code while emulating the console's hardware. The Pi 4B is the faster, higher-power upgrade and comparison board.
+Pocket Workstation OS is a customized Raspberry Pi OS Lite–based Linux system for a small, modular handheld. It contains the services and applications needed for selected workflows, plus a project-owned module service and programming SDK. When a supported USB module is connected, Linux enumerates it, the service negotiates its capabilities, and applications can use them through a stable API without choosing serial ports or installing a sensor-specific package. Hardware modules demonstrate this OS interface. Editing programs, collecting sensor data, controlling outputs, and playing retro games demonstrate practical use.
 
-## The central emulation idea
+## Central design question
 
-The translation you describe is **dynamic recompilation**, also called a JIT (just-in-time) emulator. A game contains instructions for its original console CPU. The emulator decodes guest instructions, translates blocks into native ARM64 instructions for the Pi, caches those translated blocks, and executes them on the Cortex-A53 or Cortex-A72. QEMU's TCG documentation describes this same guest-to-host translation model and its translation-block cache. [QEMU TCG internals](https://www.qemu.org/docs/master/devel/tcg.html)
+> How can a resource-constrained Linux system make supported embedded modules available through a consistent programming interface while maintaining responsive interaction under competing CPU and memory workloads?
 
-The emulator still has to model the target console around that CPU. A game can read or write memory-mapped registers for graphics, audio, timers, interrupts, DMA, controllers, save hardware, and other devices. Those accesses must produce behavior and timing the game expects. Fast paths can handle ordinary RAM; accesses to hardware registers go through device-emulation code. Generated code must also be invalidated if the guest changes instructions that have already been translated.
+The intended user is a student who wants to connect a sensor or controller, inspect it, and use it in a short program on a self-contained device. The handheld also provides offline programming and gaming. Evaluate these concrete workflows before making a general laptop-replacement claim.
 
-The Pi's Linux system does not translate the console's OS into Linux. Linux runs the emulator as a native process and provides its memory, scheduler, input, display, and audio interfaces. The emulator presents the console CPU and devices to the game. QEMU full-system emulation is the separate technique for modelling a whole virtual computer so a guest OS can boot. [QEMU system emulation](https://www.qemu.org/docs/master/about/)
+## What makes the OS our own
 
-## Academic framing: what each step teaches
+Raspberry Pi OS Lite is the base distribution and image, rather than one monolithic source-code project. The deliverable is a named derivative with a repeatable customization recipe, package/service manifest, lightweight user environment, original service and SDK packages, and measured resource-allocation policies. Upstream Linux, firmware, and drivers remain identifiable components.
 
-The project is strongest for a Computer Architecture and Operating Systems professor when each feature answers a technical question and produces evidence. Its central question is:
+The project owns:
 
-> How do the Linux runtime, device abstraction, and guest-to-host instruction translation affect the performance, memory use, and energy cost of useful computing on a low-power ARM handheld?
+1. The selected package set, service policy, boot configuration, and image recipe.
+2. `pocket-moduled`, a systemd-managed service for supported module discovery and lifecycle handling.
+3. A versioned capability contract, local application API, and bundled Python SDK and CLI.
+4. A tested resource-management policy and experiments explaining its tradeoffs.
+5. Documentation, example applications, recovery instructions, and a compatible handheld design.
 
-| Project step | Computer architecture learning | Operating systems learning | Evidence to show |
-|---|---|---|---|
-| Define the system and its interfaces | Separate CPU, memory, storage, display, input, power, and peripheral paths; reason about bandwidth and bottlenecks | Define which work belongs in firmware, kernel drivers, user-space services, or applications | Block diagram, bus map, and a table of design limits |
-| Establish a clean baseline | Distinguish instruction-set architecture from implementation and compare execution cost | Identify the stock OS, services, RAM use, and boot behavior before tuning | Board model/RAM/OS record, boot time, idle RAM, task time, and input power |
-| Start from Raspberry Pi OS Lite | Understand how software is hosted on a fixed CPU/memory platform | Trace firmware → kernel/device tree → PID 1/systemd → console/desktop; remove optional user-space services without removing required device support | Boot-flow diagram, package/service diff, and before/after measurements |
-| Study virtual memory and build a kernel | Observe how loads/stores interact with page size, TLBs, and physical memory pressure | Relate virtual addresses, minor/major faults, demand paging, reclaim, swap, and executable-page permissions to measured behavior | Small page-touch program, `/proc/vmstat`/RSS/fault results, kernel configuration diff, and a custom kernel boot with stock fallback |
-| Add the ESP32 module protocol | Separate MCU-local sampling/actuation from host computation; model events and data rates | Follow USB enumeration through the kernel/udev into one user-space broker; compare a standard class driver with a custom capability protocol | Protocol schema, attach/HELLO/capability/event/unplug trace, broker RSS and event latency |
-| Build the custom JIT prototype | Decode guest opcodes, preserve register/flag semantics, generate AArch64, cache translated blocks, model branches and memory-mapped devices | Use `mmap`/page permissions for a code cache, observe faults, and use Linux scheduling and host I/O without moving game execution into the kernel | Reference-interpreter equivalence tests, generated guest→host mapping, translation/cache metrics, and timing |
-| Run familiar Python/C++ work and game emulation | Compare CPU-bound, memory-sensitive, and graphics/device-heavy workloads | Observe the real app and emulator as Linux processes competing for memory, CPU, storage, and I/O | Correct outputs plus runtime, RSS, temperature, frame/audio behavior, and power |
-| Design the carrier and power path | Connect processor/peripheral capabilities to real buses, electrical limits, and system bottlenecks | Show how the OS expects the display, storage, input, and modules to appear | KiCad schematic/layout/3D, interface table, power budget, and clearly labelled SPICE results |
+A custom kernel is optional when a specific experiment needs it. A reliable system service, device abstraction, IPC, permissions, scheduling policy, and failure recovery are substantive OS work. They do not require moving sensor logic into the kernel. The image approach is detailed in [OS_STUDY.md](OS_STUDY.md); Raspberry Pi's [pi-gen](https://github.com/RPi-Distro/pi-gen) supports custom Raspberry Pi OS images.
 
-The Zero 2 W's Cortex-A53 and Pi 4B's Cortex-A72 are different CPU implementations in the ARM family. A useful comparison keeps the host ABI and compiler target common, then measures the same workload on both boards. That helps separate code and OS differences from microarchitecture, clock, memory capacity, thermal, and power differences. Record those remaining variables instead of calling it a perfectly controlled CPU-only experiment. [Zero 2 W hardware](https://www.raspberrypi.com/documentation/computers/zero.html), [Pi 4 hardware](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html)
-
-The key distinction to explain in the presentation is:
-
-- **ISA:** the instructions visible to software, such as guest ARM/Thumb, guest MIPS, or host AArch64.
-- **Microarchitecture:** how a specific core implements those instructions, caches, pipelines, and memory accesses.
-- **Operating system:** how processes receive address spaces, CPU time, files, devices, and permissions.
-- **Emulator:** user-space software that models guest CPU/devices and translates guest code for the host.
-
-The kernel experiment teaches OS internals and measurement. The JIT teaches ISA interpretation/translation and host execution. They meet at virtual memory, scheduling, and device I/O, but a custom kernel is not itself what makes guest instructions native.
-
-## Emulation architecture
+## Discovery and application architecture
 
 ```text
-Console game image
-      ↓
-ROM loader and memory map
-      ↓
-Guest CPU decoder → intermediate operations → ARM64 code cache/JIT
-      ↓                                      ↓
-Guest memory and device model ← CPU state and timing
-      ↓
-Graphics / audio / input / save-state backends
-      ↓
-Linux display, sound, input, files, and process services
+Sensor / buttons / LED
+        ↕ device-specific firmware
+ESP32 or another supported MCU
+        ↕ USB serial + versioned capability protocol
+Linux USB/class driver → device events
+        ↕
+pocket-moduled (systemd service)
+  discovery · sessions · registry · validation · recovery
+        ├── local IPC → bundled Python SDK / CLI → user programs
+        └── input adapter → uinput → normal Linux controller input
 ```
 
-Build the engine in layers:
+The image preinstalls handlers for scalar readings, button state, joystick axes, and LED output. A module advertises instances of these types with units, ranges, and stable identifiers. Supported capabilities become available offline, without per-sensor installation. A dashboard can show them immediately; an editor can run code importing the SDK.
 
-1. **Correct reference interpreter:** implement a small subset of a guest ISA and verify register, flag, branch, and memory behavior against test vectors.
-2. **Intermediate representation:** lower guest instructions into a small set of internal operations shared by the interpreter and code generator.
-3. **ARM64 JIT:** translate basic blocks, cache them by guest address and CPU state, and fall back to the interpreter for unsupported or exceptional cases.
-4. **Memory/device bus:** distinguish ordinary RAM from memory-mapped device registers. Keep device side effects in helpers and preserve guest-visible timing.
-5. **Console subsystems:** add graphics, audio, timers, interrupts, DMA, controller input, save behavior, and the console's firmware calls used by the target games.
-6. **Linux integration:** launch through the handheld's gaming profile, map controls, render at the panel's native resolution, and keep emulator files/configuration on the OS or removable data card as appropriate.
+The service does not infer arbitrary electronics from a cable. Firmware must identify capabilities and the host must understand their schema. A new sensor using an existing type can reuse the application interface; a fundamentally new capability needs a service/SDK update. Editors do not automatically understand physical devices: bundled examples, Python typing information, and a discovery command provide the integration.
 
-Optimizations to study include translation-block reuse, direct chaining between blocks, fewer interpreter dispatches, preallocated buffers, event-driven input, efficient RAM access, and a lightweight display/audio path. Profile before optimizing. A smaller desktop can reduce idle memory and competition for CPU time, but it does not replace guest-device emulation or guarantee faster games. Linux kernel changes can reduce system overhead or improve observability; the largest emulator speedups usually come from correct, efficient translation and device models.
+Use existing Linux interfaces where appropriate: input through `uinput`, cameras through their camera stack, storage through filesystems, and audio through the selected audio stack. Generic sensors initially live in the project API; they are not automatically kernel IIO or hwmon devices. Linux supports [userspace input-device creation](https://www.kernel.org/doc/html/latest/input/uinput.html).
 
-Choose a 64-bit Raspberry Pi OS userland for the ARM64 JIT prototype, and record the host ABI used by generated code. The JIT itself is a normal Linux user-space process: it allocates a code cache, changes page permissions as needed, synchronizes generated instructions with the CPU instruction cache, and executes them. This is a useful point of contact with virtual memory and page protection, but the JIT does not require a custom kernel.
+## OS profiles and efficiency
 
-## Console targets and scope
+- **Base:** boot, storage, USB, device management, module service, CLI, and diagnostics.
+- **Development:** base plus Python, C/C++ tools, small editor/terminal, offline API help, and an optional lightweight graphical session.
+- **Gaming:** selected emulator packages and controller mapping, launched on demand from the same installation.
 
-### Game Boy Advance — first custom-console target
+Profiles are package/service choices, not separate operating systems. Installed libraries occupy storage without requiring a resident process. The broker is resident; dashboards and emulators run when requested. Retain networking, Bluetooth, audio, and graphics where the workflow needs them. Record a reason for every disabled service.
 
-The GBA is the more sensible first target for a custom emulator. Its guest CPU is in the ARM family, but a GBA game is not automatically native Pi code: the emulator must reproduce guest CPU state, instruction behavior, memory mapping, graphics, audio, interrupts, and timing. mGBA publishes ARM64 Linux builds, so it provides a practical reference emulator for measuring what the Zero 2 W can run while the custom core develops. [mGBA downloads](https://mgba.io/downloads.html)
+The principal experiment compares module responsiveness under background CPU load with and without a cgroup CPU-allocation policy. A bounded memory-pressure experiment explains faults, reclaim, and process survival. Zram or memory-controller policies are follow-on comparisons, not simultaneous changes. See [OS_STUDY.md](OS_STUDY.md) and [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
 
-The project goal is eventually to boot a GBA game image directly in the device's custom emulator. For the 25 November presentation, use mGBA as the working gameplay baseline and aim for a custom translation proof-of-concept that executes a small ARM/Thumb instruction subset or test ROM. A complete, compatible, polished GBA JIT is a substantially larger follow-on project.
+## Hardware role and interchangeability
 
-### Nintendo 64 — advanced stretch target
+The enclosure is sized around the Zero 2 family. Screen, keyboard, USB hub, module ports, and regulated power remain with the chassis when a compatible Zero 2-family board is replaced with power off. Validate revision, connectors, GPIO header height, mounting, cooling clearance, and power. The Pi 4B stays outside this mechanical interface.
 
-N64 is a longer-term target. It needs a MIPS CPU model and additional graphics and signal-processing emulation, plus synchronized input and audio. Mupen64Plus documents ARM dynamic recompilation, while its complete setup also depends on video, audio, input, and RSP components. Use it as a performance comparison on the Pi 4B and an experiment on the Zero 2 W; do not make full-speed N64 on the Zero a success criterion. [Mupen64Plus](https://mupen64plus.org/), [Mupen64Plus core requirements](https://github.com/mupen64plus/mupen64plus-core/blob/master/README.md)
+Use a recorded **64-bit Raspberry Pi OS Lite (ARM64/AArch64)** base, validated on the available Zero 2 W. The supported hardware scope is the Pi Zero 2 family. The forward-looking design assumes a future Pi Zero 3 would retain the same connection method and support 64-bit software. This is a project assumption, not a verified specification: confirm connector/mechanical compatibility, power requirements, and kernel/firmware support before declaring a future board supported. Original Zero/Zero W support is outside scope. [Raspberry Pi OS architecture guidance](https://www.raspberrypi.com/documentation/computers/os.html).
 
-For a small emulator that you can finish and understand by the presentation, implement a tiny interpreter such as CHIP-8 or a limited RV32I CPU separately. That demonstrates instruction fetch/decode/execute and memory without pretending to be a full GBA or N64 emulator.
+Use HDMI video and USB touch, an internal OS microSD, and one external USB reader for user files. USB modules are the live-plug examples. CSI and raw GPIO/I2C/SPI changes remain powered-off operations. Standard cables and a powered hub suffice for the bench prototype. Hardware deliverables are an interface schematic, power budget, and full-size enclosure mock-up; custom carrier fabrication and battery electronics are later work.
 
-## Device hardware and modularity
+## Emulation and useful applications
 
-| Part | Concept |
-|---|---|
-| Compute | Zero 2 W low-power cartridge; Pi 4B larger/faster cartridge. Change boards with power off and board-specific adapters. |
-| Display | HDMI video plus a separate USB HID touchscreen controller. The Zero 2 W has no DSI; keep the screen path common across boards. |
-| Input | Compact keyboard plus touch and/or a USB gamepad module. A GUI is needed for practical touch operation; use a keyboard for the bare console profile. |
-| Storage | One microSD stays installed for the OS. One exposed microSD slot uses a USB reader for removable files. Unmount/eject before removing it. |
-| Expansion | Powered USB hub connects touch, the removable-card reader, keyboard if wired, and USB serial ESP32 modules. |
-| Camera | CSI camera on the correct board-specific flex connector; power down before changing the ribbon. |
-| Power | Replaceable battery concept, protected cell/charging path, and regulated supply sized from measured Zero/Pi4, screen, and hub loads. |
-| Enclosure | CAD/mock-up shows handheld and tabletop mini-PC positions, screen, keyboard, card access, expansion bay, battery, heat path, and the two compute trays. |
+Gaming is an application and input/latency workload. The user will handle the Arduino/GBA emulator project. Define a Linux application boundary for display, audio, input, files, and timing; its internal implementation and portability are not assumed. Use mGBA as an independent gameplay baseline if that integration is not ready.
 
-The official Raspberry Pi Touch Display 2 uses DSI and does not connect to the Zero 2 W. Use an HDMI panel with USB touch instead. [Touch Display 2 compatibility](https://www.raspberrypi.com/documentation/accessories/touch-display-2.html)
+Expand gaming coverage with **Game Boy/Game Boy Color and NES**, then **Master System/Mega Drive** after measurement. Candidate implementations and acceptance rules are in [EMULATION_PLAN.md](EMULATION_PLAN.md). Supporting a console does not establish a particular game's speed. N64 is removed from the active target list.
 
-USB serial modules are the main hot-plug expansion type. Treat CSI and raw GPIO/I2C/SPI modules as powered-off changes unless their electrical design explicitly supports live insertion. The compute board itself is also a powered-off swap.
+The previous phrase “small guest-to-ARM64 JIT” meant writing a dynamic translator: decode a few guest arithmetic, load/store, and branch instructions, generate native AArch64 blocks, and check results against an interpreter. That would not constitute a complete console emulator. It is no longer required and is separate from porting an Arduino emulator. The OS and application builds target ARM64; the module protocol and public SDK remain independent of CPU instruction encoding.
 
-## Shared ESP32 module protocol
+Everyday applications include a sensor inspector/logger, a short Python program using a newly attached sensor, C++ build/run, safe removable-file access, and a controller-driven game. Browser support, heavy IDEs, ML training, and large simulator stacks remain outside the core.
 
-One small Linux broker handles discovery, capability negotiation, commands, and events. The ESP32 firmware handles the hardware-specific details. Use USB serial for the first version: Linux enumerates the device, the broker opens its serial port, then the ESP32 sends its `HELLO` and capability list. A joystick module can send changed axis/button events; the broker can expose them as Linux input. The complete proposal is in [MODULE_PROTOCOL.md](MODULE_PROTOCOL.md).
+## Academic contribution and evidence
 
-This design avoids separate Linux packages, services, and protocol stacks for each simple sensor or controller. It will not eliminate all module-specific code: every ESP32 needs firmware, and novel capabilities may need a host handler. The protocol is for small control/sensor messages; keep camera video, storage blocks, display pixels, and ordinary USB HID on their standard interfaces. Measure the broker's memory and CPU use before claiming a resource saving.
+| Design decision | OS / embedded learning | Evidence |
+|---|---|---|
+| Minimal derivative image | Boot, dependencies, service lifecycle, repeatable configuration | Base checksum, recipe, manifest diff, fresh boot |
+| USB discovery to registry | Kernel/userspace boundary, enumeration, identity, versioning | Attach/restart/unplug traces; descriptor validation |
+| Shared SDK and IPC | Device abstraction, multi-client access, permissions, errors | Same program with two compatible devices or a labeled mock |
+| MCU-local hardware handling | Sampling, debounce, device drivers, host/MCU division | Firmware and one physical sensor/LED module |
+| Resource policy | Scheduling, cgroups, memory pressure, fairness | Same-board comparison, including background-task cost |
+| Removal and restart | Fault isolation, bounded queues, stale handles, recovery | Failure injection and repeated reconnect cycles |
+| Useful workflows | Interface design and validation | Editing, logging, compile/run, gaming |
+| Zero 2-family hardware | Maintainability, mechanical interfaces, power limits | Compatibility matrix, mock-up, power measurements |
 
-## Linux OS and kernel work
+Do not equate fewer packages with lower idle RAM, lower watts with lower energy per task, or service restart with preservation of device state. Each claim needs its own measurement.
 
-Raspberry Pi OS Lite is already a command-line system. The project will use a recorded 64-bit release for the shared ARM64 development/emulation path, audit it, remove optional applications/services, retain the kernel/firmware, HDMI, USB, storage, input, and device management needed by the handheld, then add a small desktop profile with a touch launcher, terminal, file manager, and editor. Leave the browser out at first. NetSurf is an optional constrained-system browser, but its documentation notes incomplete JavaScript support, so it may not work with modern sites. [NetSurf information](https://www.netsurf-browser.org/documentation/info)
+## Presentation commitment
 
-The OS study will cover:
+1. Bootable customized Zero 2 W image, repeatable recipe, and service/package manifest.
+2. `pocket-moduled`, CLI, and Python SDK bundled into the image.
+3. One real sensor/LED MCU module, with discovery, readings, output control, unplug, and reconnect working offline.
+4. A second compatible firmware example or labeled mock showing that application code does not change; a physical controller is the preferred extension.
+5. Controlled OS policy experiment, reliability tests, and whole-system power measurements where instrumentation permits.
+6. Programming workflow and at least one working retro-game demonstration; the GBA integration and additional systems are gated by time/results.
+7. Zero 2-family interface/power schematic, compatibility record, and enclosure mock-up.
 
-- boot firmware/configuration → Linux kernel/device tree/command line → initramfs/root filesystem → PID 1/systemd → console or graphical session;
-- device discovery from USB enumeration and kernel drivers through udev and the module broker;
-- one measured service/package change;
-- a small memory program that allocates and touches pages, with RSS, minor/major page faults, `/proc/vmstat`, swap, time, and responsiveness recorded;
-- building and booting a custom Raspberry Pi kernel with one carefully chosen configuration change and a unique version, keeping the stock kernel available as fallback;
-- optional GPIO device-tree overlay or BusyBox/initramfs demonstration if time allows.
+The [project brief](PROJECT_BRIEF.md) owns provisional acceptance targets. The [work plan](BUILD_GUIDE.md) makes Pi 4 comparisons, extra emulators, custom kernels, and elaborate hardware conditional on the OS service and experiment working first.
 
-Build the kernel on the Pi 4B or cross-compile on another Linux machine, then boot it on the target board. Raspberry Pi documents kernel configuration and native/cross builds for the Zero 2 W and Pi 4B. [Raspberry Pi kernel documentation](https://www.raspberrypi.com/documentation/computers/linux_kernel.html). The custom kernel is for OS learning and controlled measurement; do not remove support required for display, boot, USB, storage, networking, or input.
+## Presentation claim
 
-## Everyday work and benchmarks
-
-Use the assignments you already know:
-
-- **Python:** COL333 A1 scheduler (`part_a.py` and `part_b.py`), standard library, with its included verifier/checker. Run selected cases first.
-- **C++:** COL106 Social Network graph program. Compile from source on both boards and use a fixed sequence covering graph operations and shortest path.
-- **Optional heavy task:** COL333 A3 requires porting its native simulator/proxy stack to ARM; COL861 training and full generated suites are not Zero 2 W baseline tasks.
-- **GBA:** compare mGBA on both boards with fixed settings/scene; record frame rate, audio, CPU, memory, temperature, and power.
-- **N64:** stretch comparison; record the actual title/settings/results.
-- **Custom JIT:** record guest instructions/block count, translation time, execution time, cache hit rate, correctness against the interpreter, memory, and power for a small test program.
-- **System:** compare stock and minimal user profiles and stock/custom kernel; measure boot time, idle RAM, workload RSS, page faults, input power, and temperature.
-- **Module broker:** record discovery time, command/event latency, CPU use, RSS, and behavior after hot unplug.
-
-Use the same tasks and peripherals on both boards where possible. A lean Zero 2 W may win on idle power or memory footprint; that does not establish that it is faster than the Pi 4B. Report the metric that was actually measured.
-
-## Simulation and evidence
-
-- **KiCad:** carrier schematic, connector mapping, PCB layout, 3D board view, and board-specific compute adapters.
-- **SPICE:** a selected regulator/power-path model with stated assumptions and estimated loads.
-- **CAD:** enclosure mock-up and component placement.
-- **QEMU:** optional CPU/guest-OS learning. A virtual-machine model does not electrically simulate the physical Pi or validate the handheld PCB.
-- **Physical board measurements:** actual boot, performance, power, thermal, module, camera, touch, and emulator behavior.
-
-Label every presentation result as measured, simulated, datasheet-based, or proposed. KiCad/3D/SPICE results show design intent and component behavior; they are not a proof that the physical build works.
-
-## Deliverables by 25 November
-
-1. A minimal Raspberry Pi OS Lite-derived setup booting on the Zero 2 W and Pi 4B, with configuration and package/service notes.
-2. One OS-level service/memory study and one bootable custom kernel experiment with stock fallback.
-3. Repeatable Python and C++ task results and a measured Zero 2 W/Pi 4B comparison.
-4. A written module protocol plus an ESP32 module or software mock demonstrating discovery, capability exchange, an event/command, and removal.
-5. A custom guest-to-ARM64 translation proof-of-concept. Use mGBA for working GBA gameplay; label a complete custom GBA emulator as follow-on work unless it is actually finished.
-6. GBA measurements and an N64 stretch result if time and performance allow.
-7. KiCad schematic/layout/3D views, selected power simulation or budget, and enclosure CAD/mock-up.
-8. Presentation that explains the architecture, learning, measurements, limitations, and which features are demonstrated versus proposed.
-
-## Feasibility and honest limits
-
-The handheld concept, Lite-derived user profile, Python/C++ workflow, one-card hot-swap, ESP32 protocol, kernel build experiment, KiCad design, and a small JIT demonstration are all suitable project objectives. The Zero 2 W has only 512 MB RAM, so keep the desktop and apps narrow. GBA gameplay is the first emulator target to benchmark. N64 on the Zero is uncertain; full N64 compatibility and a complete bespoke GBA/N64 dynarec are larger projects than this presentation window. Use those as the long-term product direction and show measurable prototypes without presenting a partial CPU translator as a complete console emulator.
-
-## Source references
-
-- Raspberry Pi Zero 2 W hardware: https://www.raspberrypi.com/documentation/computers/zero.html
-- Raspberry Pi OS Lite: https://www.raspberrypi.com/documentation/computers/os.html
-- Raspberry Pi custom kernel: https://www.raspberrypi.com/documentation/computers/linux_kernel.html
-- Linux memory management: https://www.kernel.org/doc/html/latest/admin-guide/mm/index.html
-- QEMU dynamic translator internals: https://www.qemu.org/docs/master/devel/tcg.html
-- QEMU system emulation: https://www.qemu.org/docs/master/about/
-- mGBA ARM64 downloads: https://mgba.io/downloads.html
-- Mupen64Plus ARM dynarec: https://mupen64plus.org/
-- NetSurf limitations: https://www.netsurf-browser.org/documentation/info
-- Touch Display 2 compatibility: https://www.raspberrypi.com/documentation/accessories/touch-display-2.html
+Pocket Workstation OS is a Raspberry Pi OS Lite derivative that makes supported embedded modules available through a consistent application API. Its evaluation shows the cost of that abstraction and how a deliberate OS resource policy affects responsiveness on a memory-constrained handheld. Hardware modules, programming tools, and games demonstrate the system's use; measured results determine its limits.

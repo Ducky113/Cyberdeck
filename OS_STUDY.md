@@ -1,82 +1,85 @@
-# Pocket Workstation — OS Study and Change Plan
+# Pocket Workstation OS — Image and OS Study Plan
 
 ## Goal
 
-Show how Raspberry Pi OS moves from firmware to a usable Linux session, then make one measured change below the application layer. Keep the bootable Lite base and handheld display/input support intact.
+Build an identifiable Raspberry Pi OS Lite derivative with a repeatable setup recipe, integrated module service/SDK, and a measured resource policy. Package selection supports the project; service lifecycle, IPC, abstraction, recovery, and scheduling provide its main OS depth.
 
-## What to trace
+## Base and build method
+
+Use one recorded supported **64-bit Raspberry Pi OS Lite (ARM64/AArch64)** release for the Pi Zero 2-family profile. Validate on Zero 2 W first and build the service, SDK dependencies, and applications for ARM64. Original Zero/Zero W compatibility is outside scope. Assume a future Zero 3 retains the connection method and supports 64-bit software; verify its board support, boot files, and physical interface before adding it to the tested image matrix.
+
+Start with a checksum-verified Lite image and an idempotent provisioning recipe that installs project packages, configuration, and examples. Run it against a fresh image twice and compare manifests and behavior. The first milestone is repeatable setup, not byte-for-byte identical filesystem images.
+
+When packaging is stable, use a pinned [pi-gen](https://github.com/RPi-Distro/pi-gen) revision and Lite-derived custom stage to generate the image. Use the documented `arm64` branch and freeze its revision instead of assuming current defaults. Complete image generation is preferable, but do not block the service on a second build-system migration. Record whether the artifact came from provisioning a base image or generating one.
+
+Preserve:
+
+- Base image URL/checksum, release, ABI, kernel/firmware versions, and board revision.
+- Recipe revision, project package versions, configuration files, and package/service manifests.
+- Enabled/disabled service decisions and dependency checks.
+- Build environment, repository snapshot/package archive where available, and artifact checksum.
+- Per-device first-boot setup: user credentials, SSH host keys if enabled, machine identity, and module permissions. Do not distribute a personal configured SD-card clone with secrets.
+
+If upstream package versions cannot be recovered, state that limitation; a manifest alone does not guarantee a bit-reproducible rebuild. Keep normal update sources and an explicit update/retest process. Freeze the benchmark image, then test updates on a copy.
+
+## Profiles and service audit
+
+| Profile | Required content | Optional content |
+|---|---|---|
+| Base | Kernel/firmware, boot/storage, USB/class drivers, udev/systemd, broker, CLI, diagnostics | Networking according to workflow |
+| Development | Base plus Python SDK, compiler tools, editor, offline help/examples | Small graphical session, sensor dashboard |
+| Gaming | Selected emulator/core, input mapping, required audio/display support | Additional validated consoles |
+
+Record service purpose, dependencies, whether it is running, measured cost, and disable/restore procedure. Remove only unused components. Keep Bluetooth for a Bluetooth keyboard, networking for a chosen transfer workflow, and audio for games. Removing a dormant package mainly saves storage; disabling a resident service can affect RAM/CPU. Measure both separately.
+
+A proposed lightweight session must be tested for touch, readability, input, audio, and memory before it becomes the default. Keep a console recovery path. Launch dashboards/games on demand rather than keeping all applications resident.
+
+## Boot and device trace
 
 ```text
-Pi boot firmware/config
-        ↓
-Linux kernel + device tree + kernel command line
-        ↓
-initramfs (when used) → mount root filesystem
-        ↓
-PID 1 / systemd → device discovery and services
-        ↓
-login shell or graphical session → editor and applications
+Firmware/config → kernel + device tree → root filesystem
+    → systemd/udev → module service → SDK/CLI/editor
 ```
 
-Record the OS release, architecture, kernel release (`uname -a`), boot arguments (`/proc/cmdline`), service state (`systemctl`), loaded modules (`lsmod`), and boot timing (`systemd-analyze`). Use `dmesg` and `/proc/device-tree` to connect hardware discovery to the running kernel.
+Record `uname`, OS release, boot arguments, mounted cgroups, enabled units, loaded drivers, and kernel logs. Use `systemd-analyze` for its measured portion of boot and an external power-on-to-ready measurement for complete device startup.
 
-## Experiments ranked for the presentation
+For module attachment, capture USB enumeration, class-driver binding, device notification, broker open, host HELLO_REQUEST, descriptor validation, registry publication, and SDK discovery. Repeat after restarting the broker with the module still attached. These are distinct kernel and application-level discovery stages.
 
-### Core: service and user-space trim
+## Primary experiment: responsiveness under CPU contention
 
-1. Save a clean Raspberry Pi OS Lite image and inventory enabled services/packages.
-2. Disable one clearly optional service or package that is not used by the handheld.
-3. Compare boot-to-console or boot-to-launcher time, idle RAM, CPU activity, and input power before and after.
-4. Restore the service if the change breaks a required feature; record the result either way.
+**Question:** does a deliberate CPU-allocation policy preserve module-client responsiveness, and what does it cost background work?
 
-This demonstrates real OS configuration and service management. It changes startup and resident user-space load, not the kernel's paging algorithm.
+1. Verify the CPU controller is available in the selected kernel/cgroup setup. Record systemd/kernel versions and controller state.
+2. Use a controlled test harness with sibling `pocket-interactive.slice` and `pocket-background.slice` under `pocket.slice`. Place the broker and measured SDK client in the interactive branch; place background jobs in the other. Keep this hierarchy in both conditions.
+3. Baseline: equal CPU weights, 100:100. Policy condition: 400:100. This changes only relative CPU allocation; it is a starting experimental setting, not a proven optimum.
+4. Run a deterministic 50 Hz module stream while enough background CPU workers contend for the Zero 2 W's cores. Add the selected real compile/Python task as a separate workload.
+5. Measure host delivery latency, host command round-trip time, sequence gaps, queue depth, task correctness, CPU/RSS, and background completion time/throughput.
+6. Repeat without background load to identify the service's normal overhead.
 
-### Core: virtual-memory/page-fault lab
+Use system-managed benchmark units with an explicit unprivileged application user to place the controlled client correctly. A normal editor in a separate user-session cgroup is not automatically covered by this policy. Report exactly which processes the harness includes; extend the production launcher only after the controlled result is understood.
 
-Write a small C/C++ program that allocates memory in page-sized steps, touches one byte per page, then revisits the pages. Compare its behavior at low memory pressure and under a separate controlled load. Record:
+CPU weights distribute capacity under contention; they do not reserve a deadline. Do not raise the service to real-time scheduling just to improve a graph. If the policy has no effect or hurts throughput excessively, report that result and explain it. [Linux cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html), [systemd resource-control source](https://github.com/systemd/systemd/blob/main/man/systemd.resource-control.xml).
 
-- minor and major faults from `getrusage()`;
-- peak RSS and virtual size from `/proc/self/status`;
-- system page/swap counters from `/proc/vmstat` or `vmstat`;
-- run time and visible responsiveness of the editor.
+## Supporting memory observation
 
-Explain that a page fault is the kernel handling a missing or disallowed virtual-to-physical mapping; many faults are normal. Demand paging, copy-on-write, reclaim, and swap have distinct behavior. Do not infer that a process has swapped merely from its virtual size.
+Run an editor/client workload with a bounded page-touch program. Record RSS, minor/major faults, MemAvailable, swap counters, and process exits. Use a fixed working-set size and duration, an enforced test limit, and a recovery console; do not deliberately exhaust the entire interactive system.
 
-### Core or stretch: device discovery
+Write to anonymous pages when studying demand allocation. First-touch minor faults are expected; major faults are not guaranteed. Study disk-backed faults with a separate file-backed workload or actual swap activity, and label warm/cold cache state. Explain allocation, demand paging, reclaim, and swap without inferring swapping from virtual size alone.
 
-For the ESP32 USB-serial module, capture the plug sequence with `dmesg -w`, `udevadm monitor`, and `lsusb`. Follow the USB device into its serial interface, then show the module broker opening it and reading the protocol `HELLO`. This distinguishes kernel USB enumeration from the application's module-protocol handshake.
+Keep swap settings unchanged during the primary CPU experiment. Only after it passes, consider a separate no-swap versus zram test with identical workloads. Compressed RAM can trade memory capacity for processing cost; do not assume a win. [Linux zram documentation](https://docs.kernel.org/admin-guide/blockdev/zram.html).
 
-Only use a device-tree overlay for a GPIO-attached module that needs one. USB-serial discovery does not require a custom overlay. Raspberry Pi documents runtime overlay loading and inspection.
+## Optional kernel work
 
-### Core: custom kernel
+A custom kernel is justified if required controller/observability support is absent, or if one specific configuration hypothesis needs testing. Keep the stock kernel, matching modules, and a recoverable boot configuration. Record config/source diff and boot the result on real hardware. Do not remove required storage/display/USB/input support to reduce size.
 
-1. Preserve the stock boot image and copy the working system to a separate development image or backup.
-2. Start from the Raspberry Pi configuration for the target board and OS architecture.
-3. Change one optional kernel configuration item after checking its dependencies; do not remove storage, console/display, USB, input, network, or required filesystem support.
-4. Build natively on the Pi 4B or cross-compile on another Linux machine. The Zero 2 W can also build, but it will take longer and puts more load on its limited RAM/storage.
-5. Install the result as a separate kernel filename with a distinct local version; keep the stock kernel selected as a fallback.
-6. Boot the custom kernel, confirm it with `uname -r`, and compare boot behavior, kernel image size, and the behavior affected by your selected option.
+Kernel compilation is not required to call this a custom Linux distribution. If the selected stock kernel supports the experiment, prioritize the working service, tests, and measurements. An initramfs/BusyBox exercise is optional after the main project.
 
-Do not promise a large speed or memory improvement from kernel trimming. The result is valuable as a kernel configuration/build/boot experiment even if runtime differences are small. If the selected kernel option cannot be changed safely, complete the service and paging labs and present the kernel build as a stretch rather than removing a required driver.
+## Deliverables
 
-### JIT and virtual memory connection
+- Bootable derivative artifact and recipe, with package/service/configuration records.
+- Bundled daemon, Python SDK, CLI, and example programs.
+- Boot/discovery trace and lifecycle demonstration.
+- Controlled resource-policy results and memory observation.
+- Recovery procedure and known-good image.
 
-The custom emulator's generated ARM64 code runs in user space. The JIT uses virtual memory for its code cache and follows page-execute permissions and instruction-cache synchronization requirements. Observe its RSS and page faults alongside translation time. The kernel provides the process and memory mappings; basic dynamic recompilation does not require moving game execution into the kernel.
-
-### Optional: initramfs and minimal root
-
-Use a small BusyBox initramfs to demonstrate the kernel starting its first user-space process and mounting or switching to a root filesystem. This is a separate experiment; keep Raspberry Pi OS Lite as the handheld's practical user-facing system.
-
-## Keep the experiment recoverable
-
-- Save a known-good image before kernel or boot changes.
-- Keep the stock kernel and a known-good boot configuration available.
-- Change one variable at a time and record exact commands and configuration diffs.
-- Test the custom kernel and root filesystem on physical Pi hardware; QEMU does not reproduce every Raspberry Pi peripheral.
-
-## Primary references
-
-- Raspberry Pi kernel build/configuration: https://www.raspberrypi.com/documentation/computers/linux_kernel.html
-- Raspberry Pi device-tree configuration and overlays: https://www.raspberrypi.com/documentation/configuration/
-- Linux memory-management administration guide: https://www.kernel.org/doc/html/latest/admin-guide/mm/index.html
-- Linux page-table and page-fault overview: https://www.kernel.org/doc/html/latest/mm/page_tables.html
+The plan does not claim these artifacts already exist. The implementation schedule is in [BUILD_GUIDE.md](BUILD_GUIDE.md).

@@ -1,47 +1,54 @@
-# Pocket Workstation — Concept Bill of Materials
+# Pocket Workstation OS — Concept Bill of Materials
 
-This list separates hardware already available from concept components still to select. It is not a purchasing-ready design. Battery, charger, protection, and regulator part numbers require load calculations and datasheet checks before a real build.
+The immediate goal is a bench OS prototype plus a handheld design. This is not a purchasing-ready BOM; prices, part numbers, availability, and final power requirements remain to be recorded.
 
-## Available compute boards
+## Available and additional compute hardware
 
-| Item | Qty | Status | Role |
-|---|---:|---|---|
-| Raspberry Pi Zero 2 W | 1 | Available | Default low-power compute cartridge and primary target |
-| Raspberry Pi 4 Model B | 1 | Available | Higher-performance comparison and upgrade cartridge |
-| microSD cards | 2 | Select capacity/class | One remains installed for the OS; one is user-removable through an external USB reader. Record each card model for benchmarks. |
+| Item | Status | Role |
+|---|---|---|
+| Raspberry Pi Zero 2 W | Available per existing plan | Primary OS target and handheld board |
+| Raspberry Pi 4B | Available per existing plan | Separate build/comparison machine; no enclosure cartridge |
+| Second compatible Zero 2-family board | Not confirmed | Optional physical replacement/compatibility test |
+| OS microSD | Select/record model | Installed system card; preserve known-good image |
+| Spare development microSD | Recommended, availability unconfirmed | Fresh-image/recovery tests |
+| User microSD and USB reader | Select | Removable data, separate from OS storage |
 
-## Handheld concept hardware
+## Prototype priorities
 
-| Subsystem | Concept item | Selection status | Notes |
-|---|---|---|---|
-| Carrier | Custom carrier PCB plus board-specific adapter trays | Design required | Common display, USB, storage, regulated power, and expansion interface |
-| Power | User-replaceable battery cartridge | Not selected | Include proper cell protection and a charge path designed for the selected chemistry |
-| Power | Regulator/power-path module | Not selected | Size from measured Zero 2 W, Pi 4B, screen, USB, and peak loads |
-| Display | Small HDMI panel and controller | Not selected | Include the controller board's load and physical dimensions |
-| Touch input | USB HID touchscreen controller integrated with/attached to HDMI panel | Not selected | Zero 2 W has no DSI; confirm Linux support and physical interface before selecting panel |
-| Input | Compact keyboard and pointing device | Not selected | Detachable keyboard is preferred for handheld and tabletop use |
-| USB expansion | Powered USB 2 hub | Not selected | Port count covers touch, one card reader, ESP32 module(s), and wired input if selected |
-| Removable storage | One microSD-to-USB reader | Not selected | User data slot; show a safe unmount/eject action. OS microSD remains installed separately. |
-| Camera | CSI camera and Zero 22-pin flex adapter | Not selected | Power off before changing CSI ribbon; confirm adapter and camera support for selected board |
-| Joystick module | USB HID microcontroller or GPIO plus ADC | Not selected | USB HID is the easiest user-swappable option; analog sticks require an ADC |
-| Protocol module | ESP32 board exposed as USB serial | Design required | Select native USB CDC or a board with an onboard USB-to-serial bridge; firmware owns device-specific handling |
-| Expansion | Keyed board-to-board or cable connector | Not selected | Publish a pinout with ground, power rails, USB, I2C, SPI, UART, and protection limits |
-| Cooling | Passive Zero 2 W solution; upgrade cooling for Pi 4B if needed | Validate by measurement | Enclosure airflow and thermal behavior must be considered |
-| Enclosure | 3D CAD concept / mock-up | Design required | Show compute swap, battery access, display angle, keyboard, ports, and expansion bay |
+| Priority | Component | Status / selection requirement |
+|---|---|---|
+| Core | Known suitable board power supply | Record rating and voltage under measured load |
+| Core | Powered USB hub and OTG host adapter | Enough ports; documented upstream power behavior |
+| Core | HDMI display and compatible cable | Existing bench monitor acceptable first; handheld panel unselected |
+| Core | Keyboard / pointing device | Existing input acceptable first; avoid dependence on unsupported wireless |
+| Core | ESP32-family or other MCU development board | Select exact native-USB or bridge interface and reset behavior |
+| Core | One sensor, LED, and required small components | Implement scalar input and absolute LED output |
+| Measurement | Whole-system power meter | Record resolution, logging/energy capability, and measurement boundary |
+| Preferred extension | Second MCU/controller, buttons, joystick | Proves distinct capability types and gaming input |
+| Handheld concept | Small HDMI/USB-touch panel | Confirm dimensions, controller board, power, and Linux behavior |
+| Handheld concept | Zero 2-family tray and full-size enclosure mock-up | Fit around selected parts; no Pi 4 accommodation |
+| Handheld concept | Battery/protection/charging/regulator | Select only after power and runtime requirements are quantified |
+| Optional | Camera with correct Zero cable | Validate exact board revision; powered-off connection |
+| Optional | Custom carrier PCB | Interface schematic first; layout/fabrication after OS milestones |
 
-## Software and measurement tools
+Use standard USB/HDMI connectors and cables for the initial build. A custom combined high-speed expansion connector is not required. Keep GPIO/CSI interfaces separate from live-plug USB modules.
+
+## Software and tools
 
 | Item | Role |
 |---|---|
-| Raspberry Pi OS Lite | Minimal base image |
-| Lightweight desktop/session and editor | Usable small-screen interface |
-| Python, C++ compiler, Git | Everyday coding demonstration |
-| Icarus Verilog and NumPy | Selected existing COL861 workload experiments, if installation fits |
-| NetSurf browser | Optional lightweight web browsing experiment; omit if page compatibility or memory use is poor |
-| mGBA / Mupen64Plus | GBA core target / N64 stretch test; measure actual Zero 2 W performance |
-| USB power meter | Measure board and peripheral power at the supply input |
-| KiCad and SPICE | Schematic, PCB layout, 3D board view, and selected power-circuit simulation |
+| Recorded 64-bit Raspberry Pi OS Lite | ARM64 base recipe for the Zero 2 family |
+| Provisioning recipe; later pinned pi-gen custom stage | Repeatable image setup and packaged release |
+| Project daemon, Python SDK, CLI, examples | Original OS interface contribution; implementation pending |
+| Lightweight editor, Python, C/C++ tools | Programming and usability workflows |
+| systemd/cgroup tools and measurement harness | Controlled resource-allocation experiment |
+| mGBA and selected GB/GBC/NES/Sega cores | Gaming candidates; verify chosen ABI/build and performance |
+| User-owned GBA emulator | Integrate when its Linux interface is ready |
+| KiCad / CAD | Interface/power drawing and enclosure mock-up |
+| SPICE | Optional selected power subcircuit once parts/models are available |
 
-## Do not reuse from the retired build plan
+## Cost and evidence record
 
-The former CM5-specific BOM included unvalidated component choices and topology assumptions for dual batteries, USB-C charging, ideal-diode sharing, HDMI switching, and CM5 carrier features. None of those part numbers or electrical claims carry forward as approved hardware.
+For each selected part, record exact model, quantity, available/borrowed/purchased status, measured load, physical dimensions, and actual or sourced cost. Report both additional spend and full replacement cost; owning the Pi does not make the finished design free. Set the prototype cost ceiling, dimensions, mass, and runtime target by 10 November.
+
+The archived CM5 design's batteries, charging arrangements, switches, and part numbers do not carry forward as validated hardware.

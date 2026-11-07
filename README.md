@@ -1,21 +1,23 @@
-# Pocket Workstation
+# Pocket Workstation OS
 
-A low-power, modular handheld mini-PC concept centered on the Raspberry Pi Zero 2 W, with the Pi 4B as an upgrade and comparison platform.
+A custom Raspberry Pi OS Lite–based system for Pi Zero 2-family handhelds, with an integrated module discovery service, shared programming libraries, and measured resource-management policies. Sensors and controllers demonstrate the OS interface; programming and gaming demonstrate its usefulness.
+
+**Primary target:** Raspberry Pi Zero 2 W, using 64-bit Raspberry Pi OS Lite (ARM64). Compute replacement is limited to compatible Pi Zero 2-family boards, with power off. The Pi 4B is a separate build/comparison machine. The design assumes a future Zero 3 retains the same connection method and supports 64-bit software; physical fit, power, and kernel/firmware support will need validation. Original Zero/Zero W compatibility is outside scope.
 
 ## Current project documents
 
-- [Final project concept](FINAL_PROJECT_CONCEPT.md) — consolidated product, OS, module protocol, emulator, scope, and deliverables
-- [Project brief](PROJECT_BRIEF.md) — aim, learning outcomes, scope, and evidence rules
-- [Architecture](ARCHITECTURE.md) — compute cartridges, common carrier, power, expansion, display, and software
-- [Module protocol](MODULE_PROTOCOL.md) — USB module discovery and shared command/event format
-- [OS study plan](OS_STUDY.md) — boot flow, services, paging, device discovery, and custom kernel experiment
-- [Benchmark plan](BENCHMARK_PLAN.md) — review of your Python/C++ workloads and Pi comparison method
-- [Hardware feasibility](HARDWARE_FEASIBILITY.md) — OS, display/touch, camera, joystick, single removable card, and expansion constraints
-- [Concept bill of materials](BOM.md) — available boards and parts still to select
-- [Work plan](BUILD_GUIDE.md) — deliverables and schedule through 25 November 2026
+- [Final project concept](FINAL_PROJECT_CONCEPT.md) — consolidated OS-first proposal and academic contribution
+- [Project brief](PROJECT_BRIEF.md) — scope, acceptance criteria, and evidence rules
+- [Architecture](ARCHITECTURE.md) — Linux/service/library boundaries and Zero 2-family hardware
+- [Module protocol](MODULE_PROTOCOL.md) — discovery, capability schemas, sessions, and failure handling
+- [Module service and SDK](MODULE_SERVICE_AND_SDK.md) — packaged service, local API, editor workflow, and example code
+- [OS study and image plan](OS_STUDY.md) — image customization, service audit, resource-management experiment, and recovery
+- [Benchmark plan](BENCHMARK_PLAN.md) — same-board OS comparisons, responsiveness, energy, and useful workloads
+- [Emulation plan](EMULATION_PLAN.md) — user-owned GBA work and additional retro systems
+- [Hardware feasibility](HARDWARE_FEASIBILITY.md) — compatibility, interfaces, power, and physical design limits
+- [Concept bill of materials](BOM.md) — available boards and unselected prototype components
+- [Work plan](BUILD_GUIDE.md) — priorities and schedule through 25 November 2026
 
-The previous CM5 build plan is retained in [archive](archive/README.md) as historical background only.
+**Status, 8 November 2026:** design documents revised; the custom image, service, SDK, module firmware, measurements, and CAD remain to be implemented. Names, APIs, budgets, and examples are proposed contracts, not installed software. The user will handle the Arduino/GBA emulator work; OS development does not depend on reviewing or finishing it.
 
-The listed assignment and COL861 workload folders were reviewed read-only; no files in those projects were changed.
-
-**Status:** workload and hardware feasibility reviewed; protocol and OS experiment plans drafted. The Pi OS/kernel setup, module code, measurements, KiCad files, and enclosure CAD remain to be produced.
+The former CM5 proposal remains [archived](archive/README.md) and is not a current wiring guide. Earlier workload-review notes are retained in the benchmark plan; this revision does not change those external projects.

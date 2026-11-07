@@ -1,52 +1,78 @@
-# Pocket Workstation — Concept Architecture
+# Pocket Workstation OS — Architecture
 
-This is the current concept architecture. The former CM5 build plan is archived under archive/ and is not a source of current requirements.
+## Software boundaries
 
-## Product idea
+```text
+Application / editor-run program / dashboard
+             ↕ bundled SDK or CLI
+Versioned Unix-domain-socket API
+             ↕
+pocket-moduled.service
+  registry · capability adapters · session state
+  bounded queues · permissions · timeouts · reconnect
+             ↕
+Linux USB serial drivers + device-event monitoring
+             ↕
+USB hub → MCU firmware → sensor / LED / controller
 
-A handheld mini-PC that keeps its display, compact keyboard, pointing device, battery, and expansion connector when its compute board is replaced. The Raspberry Pi Zero 2 W is the low-power compute cartridge. The Raspberry Pi 4B is a larger, higher-power upgrade cartridge for tasks that need more CPU or memory.
+Controller adapter → Linux uinput → games / normal input consumers
+Standard HID / storage / camera / audio → existing Linux stacks
+```
 
-The Zero 2 W has a 1 GHz quad-core Cortex-A53 and 512 MB RAM; Pi 4B boards have faster Cortex-A72 cores and ship with different RAM capacities. Record the specific Pi 4B model used in the evaluation. The two boards do not have the same physical layout, so the concept needs a shared carrier interface and a separate adapter or tray for each board.
+Original OS components are userspace packages shipped with the image. Existing USB drivers remain essential. A standard HID gamepad works without passing through the broker.
 
-## Main blocks
+## Responsibilities
 
-| Block | Concept role |
-|---|---|
-| Compute cartridge | Removable board tray for the Zero 2 W or Pi 4B. Swappable by the user with power off. |
-| Common carrier | Standardizes the screen connection, USB input devices, storage, power, and expansion signals across board-specific adapters. On the Zero 2 W, provide a powered USB hub for touch, one removable-card reader, and user modules; choose a wireless keyboard or add hub ports for wired input. |
-| Battery and power module | Replaceable battery pack, cell protection, charge control, and regulated system rail sized against measured screen and compute loads. No direct battery connection to GPIO. |
-| Display and controls | Small HDMI display with a separate USB HID touch connection, compact keyboard, and pointing device attached to the chassis. Prefer a detachable keyboard so the unit can also be propped up as a mini-PC. |
-| Expansion bay | A keyed connector for user-designed USB modules. ESP32-based modules own their sensor/actuator details and communicate through one versioned module protocol. Document power, USB, and any non-hot-plug GPIO buses separately. |
-| Camera | A CSI camera module on the Zero 2 W's 22-pin camera connector, using the appropriate Zero camera flex cable. |
-| Joysticks | Digital buttons can use protected GPIO. Analog sticks need an ADC or a USB HID microcontroller module; the Zero 2 W does not provide general-purpose analog inputs. |
-| Storage | Keep the OS microSD installed in the board. Add one user-accessible microSD reader as USB mass storage through the powered hub, with safe unmount/eject before removal. |
-| Enclosure | Concept CAD model with a compute bay, battery access, heat path, display hinge/stand, and expansion access. |
+| Layer | Owns | Does not own |
+|---|---|---|
+| MCU | Hardware driver, sampling, debounce, unit conversion, local output timeout | Linux scheduling or editor integration |
+| Kernel | Enumeration, class drivers, memory, scheduling, normal input devices | Project-specific sensor semantics |
+| udev | Device metadata/permissions and events | Persistent protocol loops or package installation |
+| systemd | Startup/restart, logging, service identity, resource policy | Sensor sampling |
+| Broker | Handshake, registry, multiplexing, validation, recovery | Loading code supplied by a module |
+| SDK / CLI | Application API, types, bounded waits, errors | Separate serial connections per application |
+| Applications | Choose capabilities, request readings/actions, handle loss | Assume hardware is always present |
 
-## Replaceable compute architecture
+Run one broker at boot, even with no modules. Subscribe to device events before enumerating existing devices; deduplicate the paths. This handles boot attachments and broker restarts. Device rules set permissions and identify configured interfaces; the broker handshakes. Keep long-lived work outside udev rules. [systemd udev documentation source](https://github.com/systemd/systemd/blob/main/man/udev.xml).
 
-The common interface is a design boundary, not a finished connector selection. The concept schematic must show how each board adapter maps its native connectors to the same display, USB, power, and expansion signals. Board replacement is planned with the system off; hot-swapping a live computer board is outside the scope.
+## Planned packages
 
-The shared shell should be sized around the larger Pi 4B cartridge if both boards must fit without changing the exterior. The Zero 2 W then uses a smaller adapter and leaves room for battery or expansion. If the intended product should stay as small as a Zero 2 W enclosure, show the Pi 4B as an alternative rear module or an enclosure revision instead of claiming both fit the same bay. The Pi 4B may need more cooling and a different power profile; do not claim it has the Zero 2 W's battery life. Treat the screen and carrier as common modules and calculate runtime from measured load.
+- `pocket-os-config`: profile manifests, systemd policy, device rules, release metadata.
+- `pocket-moduled`: C++ event-driven daemon with bounded buffers and local IPC.
+- `python3-pocket-modules`: Python library, typing information, examples.
+- `pocket-module-tools`: `pocket-modules` CLI and offline help.
+- `pocket-examples`: logger, LED example, optional dashboard.
+- `libpocket-modules`: optional C/C++ client after the Python contract stabilizes.
 
-## Software architecture
+These names are proposed; no package is implemented. See [MODULE_SERVICE_AND_SDK.md](MODULE_SERVICE_AND_SDK.md).
 
-- Base: Raspberry Pi OS Lite of one recorded release and architecture. Audit packages and services; remove only optional software while retaining boot, kernel/firmware, device management, HDMI graphics, USB, microSD, and required network support.
-- Bare-computing profile: boot to a Linux console with working HDMI output, keyboard input, storage, and module discovery. Touch input belongs to the graphical profile.
-- User-operable profile: add a small graphical session, touch-friendly launcher, terminal, file access, and one lightweight editor. Raspberry Pi OS Lite is command-line-only; the graphical layer must be installed deliberately.
-- Feature profiles: install/enable the camera tools, joystick mapping, and safe-removal UI only when the matching module is present. Keep hardware drivers and the small feature UI separate where practical.
-- Development: Python, a small C++ compiler workflow, Git, and a lightweight editor or terminal editor.
-- Browser: optional. Leave it out of the base profile; test NetSurf as a low-footprint option for simple pages if web access matters.
-- Module broker: one small user-space service discovers USB serial modules, negotiates protocol version/capabilities, dispatches standard requests, and routes events to generic handlers. Device-specific sensor/actuator code stays on the ESP32 firmware. See MODULE_PROTOCOL.md.
-- OS study: trace firmware-to-kernel-to-systemd boot, inspect services and device tree, build a custom kernel with one isolated configuration change while retaining stock fallback, and measure page faults/swap under memory pressure.
-- Emulation: the product goal is a custom guest-to-ARM64 dynamic recompiler. Prototype a small ARM/Thumb guest instruction subset; use mGBA for real GBA gameplay baseline and measure N64 as a stretch on both boards. A complete console hardware model is separate follow-on work.
-- Comparison: use the same task, image version, package set, display mode, storage class, and measurement method on both boards where possible.
+## Board compatibility
 
-## System boundaries
+| Board | Physical role | Image policy | Status |
+|---|---|---|---|
+| Zero 2 W | Primary handheld | Recorded 64-bit Lite derivative; ARM64 packages | Available; image not tested |
+| Another Zero 2 W | Powered-off replacement | Same recipe with per-device setup | Pending board availability |
+| Future Zero 3 (assumed successor) | Prospective replacement using the same connection method | Assumed 64-bit; kernel/firmware and image support to verify | Design assumption; specifications and compatibility not validated |
+| Pi 4B | External build/comparison | Same software/ABI for fair comparison where possible | Available; outside chassis interface |
 
-- The handheld is a concept model plus testable software setup; no custom PCB fabrication is required by the presentation date.
-- KiCad 3D view and enclosure CAD show fit and routing intent. They do not emulate the Raspberry Pi board electrically.
-- SPICE covers only the chosen power subcircuit and only to the accuracy of its component models and stated load assumptions.
-- QEMU may support selected Pi 4 board behaviors, but its emulated peripherals and performance do not validate the physical Zero 2 W or handheld.
-- Battery selection, charging, protection, connector current, and regulator design remain proposed until validated against suitable parts and measured loads.
-- The official Raspberry Pi Touch Display 2 uses DSI and is not compatible with Zero 2 W. Use an HDMI panel with a USB touch controller for a common Zero/Pi 4 display path.
-- The Zero 2 W has one USB 2.0 OTG data port. Touch, the single external card reader, the module broker link, and any USB keyboard/joystick share a powered hub and its bandwidth and power budget. Size the hub to the chosen peripherals. Keep CSI camera data on CSI rather than sending it through the low-rate module protocol.
+Support is limited to the Pi Zero 2 family, with a forward-looking assumption that a future Zero 3 retains the connection method and 64-bit architecture. Check revision, connectors, header height, antenna clearance, mounting, cable access, power, and boot support before adding any replacement. Keep the OS card with its validated board/image unless shared-image compatibility is tested. Original Zero/Zero W boards are outside scope.
+
+## Hardware topology
+
+The chassis retains HDMI panel, keyboard/pointer, powered hub, external card reader, and module ports. The tray accepts only verified Zero 2-family boards with power off. No Pi 4 tray or Pi 4-sized shell is planned.
+
+The Zero's USB data port operates as host for the hub. Ports serve touch, removable storage, MCU modules, and wired keyboard if selected. Bluetooth input is optional only where supported. CSI uses its own ribbon and camera stack. Pixels and storage blocks do not travel through the module protocol.
+
+Use standard USB/HDMI cables for the prototype. A later carrier can tidy the interconnect after power and signal-routing review. Battery/charging work is separate; a known supply supports OS experiments.
+
+## Resource and failure boundaries
+
+Use sibling cgroups for interactive service/client work and background jobs when evaluating CPU weights. Weights operate relative to sibling contention and provide no real-time guarantee. Compare equal weights against the selected policy with identical software/workloads and unchanged memory settings.
+
+Bound queues per module and client. Faulty devices cannot block other modules. Slow clients get an explicit overflow/resynchronization indication or disconnect. Removal invalidates handles, fails pending operations, and releases virtual inputs. Firmware returns outputs to the declared default after its host lease expires.
+
+## Image and UI
+
+Use 64-bit Raspberry Pi OS Lite and ARM64 application packages for the Zero 2-family target. Bundle service/library packages and a small editor workflow. Retain console operation; add a small graphical session for touch/dashboard/games after measuring footprint. SDK imports work in the bundled interpreter; independent virtual environments require documented installation or system-package access.
+
+Supported modules become visible in registry/UI. Applications subscribe to readings/events. Connection does not launch arbitrary programs, inject code into editors, or download drivers from devices.

@@ -1,85 +1,95 @@
-# Pocket Workstation — Work Plan
+# Pocket Workstation OS — Work Plan
 
-**Target presentation:** 25 November 2026  
-**Current plan:** complete the concept, working software demonstrations, measured comparison, and design artifacts by the presentation. Manufacturing the final handheld is not a deadline requirement.
+**Presentation:** 25 November 2026  
+**Plan revised:** 8 November 2026  
+**Priority:** working custom OS image, integrated service/SDK, and a controlled OS experiment
 
-## Work packages
+Implementation has not started in this repository. The schedule is a proposed sequence, not a record of completed milestones. The user handles the Arduino/GBA emulator work independently; the OS can demonstrate gaming with an existing core.
 
-### 1. Freeze the scope and measurements
+## 1. Freeze the base, boundaries, and targets
 
-- Use the Zero 2 W as the low-power baseline and Pi 4B as the compute upgrade.
-- Record Pi 4B RAM capacity, OS release and architecture, SD card, screen resolution, and power meter.
-- Use COL333 A1 Part A/B as the Python task and COL106 Social Network as the C++ task. Keep one small COL861 workload optional.
-- Pick one memory/paging experiment and one energy measurement.
-- Decide whether the optional browser and N64 experiment fit after the base workload runs.
-- Confirm the minimum editor/desktop setup and the concept handheld dimensions.
+- Record a supported 64-bit ARM64 Lite image/checksum, Zero 2 W revision, storage, input, display, and power equipment.
+- Keep compute interchangeability within tested Zero 2-family boards; Pi 4B is a separate machine.
+- Select one real MCU board and scalar sensor/LED example. Confirm its USB mode and reset behavior.
+- Freeze capability schemas, initial API, candidate-port matching, and timeout/queue policies.
+- Establish a base manifest and initial acceptance baselines. Select screen/keyboard and propose size, mass, cost, and runtime targets.
 
-**Complete when:** the task list and comparison method fit on one page.
+**Done when:** the base boots, hardware inputs are recorded, and the project brief has frozen provisional targets.
 
-### 2. Build the minimal usable desktop
+## 2. Make the OS customization repeatable
 
-- Start from Raspberry Pi OS Lite.
-- Audit Lite first; retain the kernel, firmware, HDMI console/display, USB, microSD, input, and device management. Remove optional services/packages, then add only the small graphical session, USB touch support, launcher, editor, and tools needed for the chosen tasks.
-- Leave the browser out initially. If the core profile has memory headroom, try NetSurf on a simple static page and record compatibility and memory use.
-- Keep a record of installed packages, enabled services, boot-to-editor time, idle RAM, and SD image size.
-- Use a low-resolution desktop appropriate for the handheld screen.
-- Test the same workflow on the Pi 4B.
+- Preserve a known-good Lite image and implement an idempotent provisioning recipe.
+- Package configuration, service, CLI, Python SDK, and examples as they become available.
+- Keep a reasoned service audit; remove only unused components and preserve dependency/recovery paths.
+- Add a small editor/terminal workflow first; add the measured graphical session for touch/dashboard/game use.
+- Run the recipe on a fresh base and record package/configuration differences. Move to a pinned pi-gen stage once packages stabilize if time permits.
 
-**Complete when:** both boards boot to the editor, run the selected Python and C++ tasks, and have a saved configuration record.
+**Done when:** a fresh target can reproduce the development environment with manifests and recovery instructions.
 
-### 3. Test workloads and daily-use flow
+## 3. Implement the common module path
 
-- Run the same COL333 A1 Python inputs and COL106 Social Network C++ command sequence on both boards. Build the C++ source on each board rather than copying a host binary.
-- If the core work is complete, try mGBA with a fixed GBA workload on both boards. Treat N64 on the Zero as a stretch; compare a representative title with the Pi 4B and record actual speed and compatibility.
-- If time allows, try a NumPy-only TinyStories integer inference or a small Icarus unit simulation from COL861. Keep PyTorch and the A3 full-match stack as stretch work only.
-- Do not use simulated FPGA cycles as Pi CPU performance.
-- Build a limited guest ARM/Thumb-to-ARM64 dynamic-recompiler proof-of-concept, with a reference interpreter and instruction-state checks. Use mGBA for the working GBA gameplay demonstration; do not present a partial translator as a complete GBA emulator.
-- Attempt a simple AVR/Arduino simulation only after the core tasks are complete.
+- Build the frame parser and a serial mock for deterministic tests.
+- Implement host-initiated handshake, indexed descriptors, identity/session tracking, and registry.
+- Connect one physical MCU and demonstrate sensor readings and LED writes.
+- Add bounded Unix-socket IPC, CLI discovery, and Python API examples.
+- Integrate systemd startup/restart, permissions, startup enumeration, and offline operation.
+- Validate timeout, module reboot, unplug, reconnect, broker restart, malformed frames, and slow clients.
 
-**Complete when:** each task has a status, command, wall time, memory reading, and short usability note.
+**Done when:** an unprivileged editor-run program uses the module without serial setup or package installation, and loss/recovery is explicit.
 
-### 4. Design the modular handheld
+## 4. Measure the OS design
 
-- Draw the block diagram for a common carrier and two board-specific compute adapters.
-- Define a keyed expansion connector and its power/data pin groups. Mark USB modules as possible live-plug devices; plan CSI and raw GPIO module changes with power off.
-- Write the module protocol v0 and implement a host daemon plus one ESP32 module or mock. Demonstrate attach, capability negotiation, one command/event, and removal.
-- Show the USB topology: HDMI video, USB HID touch, a powered hub, one USB microSD reader, and the module port. Keep the boot microSD installed; demonstrate safe unmount before removing the data card.
-- Trace boot to systemd, build/boot one custom kernel configuration, and compare it with the stock kernel. Keep the stock kernel available as fallback. Also measure one optional service change and the paging lab.
-- Draw the power path with the battery cartridge, protection, charging, regulator, and loads.
-- Create the KiCad schematic and a PCB layout with labeled connectors and board mounting points.
-- Simulate the chosen regulator/load circuit in SPICE, or present a reasoned power budget if a usable component model is unavailable.
-- Create the enclosure mock-up with the handheld and tabletop mini-PC modes.
+- Capture L/A/B baselines as defined in [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
+- Verify CPU-controller support and set up the same sibling-cgroup hierarchy in both policy conditions.
+- Compare equal weights against the selected policy under controlled CPU contention, reporting latency and background throughput.
+- Perform a bounded memory/page-fault observation with memory policy unchanged.
+- Run 20 reconnect cycles, restart/fault cases, and a one-hour reliability workload.
+- Measure whole-system input power/energy where equipment permits; record instrumentation limits.
 
-**Complete when:** the concept can be explained from battery through compute, display, input, and expansion, and the evidence labels identify design versus simulation.
+**Done when:** repeatable raw results explain what the design improves, what it costs, and where it fails.
 
-### 5. Benchmark and prepare presentation
+## 5. Demonstrate usefulness and physical design
 
-- Run each benchmark several times after a clean boot; report median and spread.
-- Capture idle and task power with the same display and peripherals.
-- Record temperature and CPU clock during longer tasks to disclose throttling.
-- Use a 2x2 comparison where feasible: Pi Zero 2 W and Pi 4B, each with standard desktop and lean desktop configurations. If the standard desktop is unusable on the Zero, label that result rather than changing the comparison silently.
-- Present the specific metrics where the lean setup helps, plus the tasks where the Pi 4B remains faster or more capable.
-- Keep screenshots, photos, measurements, source commands, and CAD/KiCad renders together.
+- Run selected Python and C++ edit/build/run tasks with correctness checks.
+- Show sensor inspection/logging and LED control through the SDK.
+- Test one retro game first. Add GB/GBC, NES, then selected Sega systems as time permits. Integrate the user's GBA build if ready.
+- Prefer a second controller example with uinput; use a standard HID controller for the first game if needed.
+- Draw the Zero 2-family hardware interface, power boundary, and USB topology.
+- Build a full-size enclosure mock-up and check readable code, typing, cable access, and tabletop use.
 
-**Complete when:** every claim on the slides points to a measured result, a simulation, a design drawing, or an explicitly labeled proposal.
+**Done when:** one coherent demo connects boot, discovery, code, resource pressure, recovery, and practical applications.
 
-## Suggested schedule
+## Proposed schedule and gates
 
-| Date | Focus |
-|---|---|
-| 7–10 Nov | Workload triage, OS inventory, protocol v0 and scope lock |
-| 11–15 Nov | Minimal desktop, Python/C++ demos, custom kernel build, start guest-to-ARM64 JIT and first measurements |
-| 16–18 Nov | ESP32 module demo, boot custom kernel on target, JIT correctness demo, GBA baseline test; N64 only if time remains |
-| 19–21 Nov | KiCad power/expansion design, protocol diagram and enclosure renders |
-| 22–23 Nov | Repeat measurements, create result charts and rehearse demo |
-| 24 Nov | Freeze slides and evidence, prepare offline fallback |
-| 25 Nov | Presentation |
+| Date | Focus | Gate |
+|---|---|---|
+| 8–10 Nov | Base/parts/requirements; service audit; framing and API contract | Bootable base and targets fixed |
+| 11–13 Nov | Broker + physical sensor/LED + CLI | Real discovery/read/write works |
+| 14–16 Nov | SDK, packaging, permissions, recovery; fresh-image setup | Offline Python demo and lifecycle tests pass |
+| 17–19 Nov | Resource-policy and memory experiments; reliability/energy | Raw results and bounded failure behavior |
+| 20–21 Nov | Gaming, optional second module; interface drawing/mock-up | Useful end-to-end demo |
+| 22–23 Nov | Repeat trials, verify fresh setup, charts and rehearsal | Claims trace to evidence |
+| 24 Nov | Freeze artifacts/slides; save offline demo recording and recovery image | Recoverable presentation |
+| 25 Nov | Presentation | Demonstrate measured system |
 
-## Risk controls
+If the physical module path is not working by 13 November, stop adding capabilities and focus on one sensor/LED device. If packaging/recovery is not stable by 16 November, defer extra emulators, Pi 4 comparisons, C++ SDK, and all optional kernel work.
 
-- The Zero 2 W has only 512 MB RAM; treat full IDEs, model training, and heavyweight browser use as poor fits. Browser support is optional.
-- Do not expect the shared protocol to eliminate all module-specific logic: each ESP32 needs firmware, and new capability types may need a host UI handler.
-- N64 performance on the Zero 2 W is uncertain; make GBA the main retro-emulation target and report measured N64 results as a stretch.
-- Do not claim safe battery charging or hot-swap behavior from a schematic alone.
-- Keep large training runs, Vivado synthesis, and full repository copies off the Zero 2 W.
-- If time shrinks, keep: the working desktop, Python and C++ tasks, OS memory/kernel study, limited guest-to-ARM64 JIT demo, module-protocol mock, Pi 4B comparison, power/expansion schematic, and enclosure render. Drop COL861, browser, N64, and a complete custom GBA model first.
+## What to cut first
+
+1. Additional console cores, browser, and heavy workload ports.
+2. Pi 4 benchmarking and validation of additional Zero 2-family boards or a future Zero 3.
+3. C/C++ client library, editor plugin, and extra physical modules.
+4. Kernel rebuild, zram comparison, custom PCB layout, regulator simulation, and fabrication.
+
+Keep the fresh-image recipe, real module, Python SDK/CLI, lifecycle recovery, one controlled OS experiment, and basic useful demo. A mock alone is a contingency and must be labeled; it cannot replace the physical embedded claim. No new JIT or complete emulator rewrite is on the critical path.
+
+## Presentation flow
+
+1. Boot the customized image and show its version/manifest.
+2. Attach a sensor, inspect its descriptor, and run a short SDK program.
+3. Start background work, demonstrate the policy experiment, and show its tradeoff.
+4. Unplug/replug and restart the service; show bounded errors and recovery.
+5. Demonstrate programming and a game using normal controller input.
+6. Explain the Zero 2-family interface, power budget, compatibility limits, and actual versus proposed hardware.
+
+Every graph and feature must identify whether it is measured, simulated, datasheet-derived, or proposed. A concept enclosure suffices only if the course permits a design/software prototype; the fabrication rubric remains unconfirmed.

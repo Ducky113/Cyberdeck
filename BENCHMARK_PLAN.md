@@ -1,11 +1,55 @@
-# Workload Review and Benchmark Plan
+# Pocket Workstation OS — Benchmark Plan
 
-Reviewed read-only from these folders:
+## Purpose and controls
 
-- /home/meesa/Desktop/COL333/A1
-- /home/meesa/Desktop/COL333/A3
-- /home/meesa/Desktop/Assignments/Old
-- /home/meesa/Desktop/COL861/Project/Files
+The primary comparison is **the same Zero 2 W running controlled OS configurations**. A Pi 4B comparison is secondary and does not prove that the customization improved the Zero. Use the acceptance targets in [PROJECT_BRIEF.md](PROJECT_BRIEF.md); all targets remain proposed until measured.
+
+| Configuration | Purpose |
+|---|---|
+| L: recorded unmodified Lite | Baseline boot, idle footprint, and packages; no module API exists here |
+| A: Lite + same editor/runtime + project service/SDK, default service policy | Functional baseline for the custom OS |
+| B: A with documented service/package trimming | Isolate the effect of trimming while preserving the same workflow |
+| C: B with CPU policy enabled | Isolate the resource-allocation change with identical packages/workloads |
+
+Do not compare a bare console to a graphical session and attribute the whole difference to optimization. Compare A/B/C with identical display, applications, drivers, modules, swap configuration, and workload. L is a context baseline, not a module-latency comparator. Use the same 64-bit ARM64 image/ABI throughout; no legacy-architecture comparison is planned.
+
+## Core measurements
+
+1. **Image and boot:** recipe/base checksum, installed footprint, enabled units, boot-to-console and boot-to-ready. Record actual readiness of the API/editor, not just systemd target completion. Repeat cold boots separately from warm workload tests.
+2. **Service and SDK overhead:** broker RSS/CPU, Python client RSS/CPU, and whole-system MemAvailable. Record no-module, connected-idle, and streaming conditions. Normalize CPU percentages to one core; do not add shared RSS blindly to infer total physical memory.
+3. **Discovery and recovery:** 20 attach cycles, unplug during a request, broker restart while attached, and module reboot. Measure kernel device-add to usable registry entry. Include failures/timeouts in results.
+4. **Resource policy:** equal versus selected CPU weights using the same cgroup hierarchy, a 50 Hz stream, and controlled background contention. Collect at least 10,000 events per trial. Report p50/p95/p99/max latency, missing events, queue high-water marks, and background throughput/completion time.
+5. **Memory:** bounded page-touch workload with RSS, faults, MemAvailable, swap counters, task correctness, and responsiveness. Keep it separate from the CPU-policy comparison.
+6. **Reliability:** one-hour run and malformed/flooded input tests. Track RSS over time, bounded buffers, rejected frames, reconnects, timeouts, stale handles, and virtual input cleanup.
+7. **Useful programming:** edit/run selected Python, compile/run C++, then use the SDK to log a sensor and control an LED offline. Report time and usability, not just successful launch.
+8. **Gaming:** one working selected title/test scene first, then expand according to [EMULATION_PLAN.md](EMULATION_PLAN.md). Record emulated speed, frame pacing, audio underruns, controls, save behavior, memory, temperature, and power.
+9. **Energy:** whole-system idle and energy per completed workload, including display/hub/modules. Record meter resolution/sample rate and measurement boundary.
+
+## Latency definitions
+
+- **Host delivery latency:** broker's first read containing an event to its delivery to the SDK caller, using a shared host monotonic clock. This excludes MCU sampling, USB transport, and time queued before the broker reads; label it accordingly.
+- **Host round-trip time:** host request submission to receipt of its matching module response, using one host clock. This includes bidirectional transport plus firmware work but is not one-way sensor latency.
+- **Physical end-to-end latency:** optional button/signal edge to observable application response. Requires common-clock external instrumentation or a validated synchronization method. Do not subtract unsynchronized MCU and Pi clocks.
+- **Input latency:** SDK delivery is not display response. An emulator's rendering/audio adds separate delays.
+
+Use event sequence counters to expose drops; a fast percentile calculated only from surviving events can conceal overload. Report trace instrumentation overhead and distinguish a logging-enabled benchmark from normal operation.
+
+## Test method
+
+Record board revision, OS/ABI, kernel, CPU governor/clock, thermal state, storage, display resolution/brightness, Wi-Fi/Bluetooth, peripherals, and every relevant config. Keep voltage and cooling consistent. Monitor throttling and undervoltage.
+
+Run at least five trials per runtime/policy condition after controlled warm-up. Alternate baseline/policy order where practical. Report trial medians/ranges and per-trial latency distributions; do not infer rare-tail guarantees from a tiny sample. Use fixed inputs and seeds for stochastic Python tasks and verify outputs before timing. Save failures as data.
+
+For energy, integrate sampled input power over the task, or use a meter's energy counter with sufficient resolution. Instantaneous watts alone do not measure energy per task. A board-only reading excludes screen/hub power; label it. Battery runtime estimates use usable pack energy and conversion losses and remain estimates until tested.
+
+## Existing workload review
+
+The following notes are retained from the earlier read-only review; they have not been remeasured by this plan revision. Source folders:
+
+- `/home/meesa/Desktop/COL333/A1`
+- `/home/meesa/Desktop/COL333/A3`
+- `/home/meesa/Desktop/Assignments/Old`
+- `/home/meesa/Desktop/COL861/Project/Files`
 
 ## Familiar workload review
 
@@ -22,33 +66,12 @@ Reviewed read-only from these folders:
 
 The A1 directory is about 13 MB and is a particularly clean, dependency-light Python task. The old assignments directory is about 352 MB including generated files and binaries; copy only the selected C++ source, headers, and inputs. The A3 directory is about 4.1 GB and is not a good thing to clone wholesale onto the handheld.
 
-## Core benchmark set
+## Selected workloads and optional comparison
 
-1. **Python CSP task:** run A1 Part A and Part B on the same selected sample cases. Measure each part separately and check each output with the included verifier/checker. Avoid the checker's full default suite on the Zero until its runtime is known.
-2. **C++ graph task:** compile the COL106 social-network program from source and feed it a fixed command sequence that exercises add-user, add-friend, friend suggestions, shortest path, and output. Record build time separately from run time.
-3. **Everyday editor task:** edit one of those programs on the handheld, run it, inspect the output, and report the interaction experience. Keep this separate from raw compute timing.
-4. **OS footprint/kernel:** compare standard and minimal user profiles, then stock and custom kernels at idle and during the same task. Record the kernel config diff, image size, boot timing, memory, and any behavior affected by the selected option.
-5. **Memory/paging:** keep the same editor and task open, apply a controlled memory load, and record available RAM, swap-in/out, major faults, and responsiveness. Removing packages alone does not alter the kernel's paging implementation.
-6. **Energy:** measure input power for boot/idle, the Python solve, the C++ compile, and the same GUI load using the same screen and hub peripherals.
-7. **Module service:** measure daemon idle RSS, discovery time, and memory with one and several connected/mock modules. Record messages per second and CPU use for a joystick or sensor stream.
-8. **GBA baseline:** run the same homebrew/test workload in mGBA at native resolution on the Zero 2 W and Pi 4B. Record frame rate, audio quality, CPU use, memory, and power.
-9. **N64 stretch:** try one representative title on both boards at native resolution and report speed/compatibility as observed, without making N64 support a core pass condition.
-10. **Custom JIT prototype:** compare the same guest instruction stream in the reference interpreter and translated ARM64 blocks. Check outputs/register state, then measure translation time, execution time, cache hits, RSS, and power.
-11. **Browser optional:** compare desktop idle and a simple static page with NetSurf, then omit it if the benefit or site compatibility is poor.
+Use A1 Part A/B on small fixed cases with their verifier/checker. Use COL106 Social Network with a fixed command sequence covering graph operations and shortest path; report compilation separately from execution. Compile for the target rather than copying an existing desktop binary.
 
-## Optional follow-on tasks
+If time remains, repeat a subset of B/C and the same workloads on Pi 4B, recording its RAM and all configuration differences. Same-family board swaps require a separately tested compatibility matrix. Keep A3 porting, COL861, browser trials, additional kernels, and further emulator cores outside the minimum benchmark set.
 
-- COL333 A3: first establish an ARM64-compatible simulator/proxy build; then run one short smoke match. Do not compare its strategy score as a CPU benchmark.
-- COL861: run one small fixed-point inference or one small Icarus test. Do not use generated FPGA cycles as Pi wall time.
-- Complete custom GBA/N64 hardware compatibility is beyond the presentation prototype; continue from the limited ARM/Thumb JIT after the core deliverables.
-- simavr: try one basic Arduino AVR program if installation and memory use are acceptable.
+## Result artifacts
 
-## Fair measurement procedure
-
-- Record each board's exact RAM size, OS release and architecture, SD card, desktop packages, screen resolution, and connected peripherals.
-- Use the same OS release and architecture where supported. Prefer a 2x2 comparison: Pi Zero 2 W and Pi 4B each on standard desktop and lean desktop.
-- Keep display brightness, Wi-Fi state, cooling, storage, and inputs fixed.
-- Run at least five repetitions after warm-up; report median and range. For emulation, include a fixed scene or test ROM and the same emulator settings.
-- Record wall time, peak resident memory, input power, temperature, and CPU clock during longer loads.
-- Run correctness checks first; preserve exact commands and output artifacts.
-- Report concrete tradeoffs. Do not claim a general Zero 2 W speed advantage based on comparing one lean configuration against a heavier Pi 4B setup.
+Store commands, manifests, inputs/seeds, logs, and raw tabular results beside each chart. Report whether a target passed, failed, or was not tested. The project succeeds academically through a justified design and honest evidence; a policy showing no improvement is not a reason to conceal its results.
